@@ -10,3 +10,8 @@ MovementState::MovementState()
 MovementState::~MovementState()
 {
 }
+
+void MovementState::Initialize(UMovementStateMachine* machine)
+{
+	Machine = machine;
+}

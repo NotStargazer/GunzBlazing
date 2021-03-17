@@ -12,27 +12,28 @@ void UDP_WeaponInventory::BeginPlay()
 {
 	Super::BeginPlay();
 
-	PrimaryWeapon = PrimaryWeaponClass.GetDefaultObject();
-	if (IsValid(PrimaryWeapon))
-	{
-		PrimaryWeapon->SetupWeapon();
-	}
-	SecondaryWeapon = SecondaryWeaponClass.GetDefaultObject();
-	if (IsValid(SecondaryWeapon))
-	{
-		SecondaryWeapon->SetupWeapon();
-	}
-	MeleeWeapon = MeleeWeaponClass.GetDefaultObject();
-	if (IsValid(MeleeWeapon))
-	{
-		MeleeWeapon->SetupWeapon();
-	}
+	PrimaryWeapon = DuplicateObject(PrimaryWeaponClass.GetDefaultObject(), nullptr);
+	SecondaryWeapon = DuplicateObject(SecondaryWeaponClass.GetDefaultObject(), nullptr);
+	MeleeWeapon = DuplicateObject(MeleeWeaponClass.GetDefaultObject(), nullptr);
 }
 
 void UDP_WeaponInventory::Initialize(AFPSPlayer* Player, USkeletalMeshComponent* Model)
 {
 	PlayerReference = Player;
 	WeaponModelComp = Model;
+
+	if (IsValid(PrimaryWeapon))
+	{
+		PrimaryWeapon->SetupWeapon(PlayerReference);
+	}
+	if (IsValid(SecondaryWeapon))
+	{
+		SecondaryWeapon->SetupWeapon(PlayerReference);
+	}
+	if (IsValid(MeleeWeapon))
+	{
+		MeleeWeapon->SetupWeapon(PlayerReference);
+	}
 }
 
 void UDP_WeaponInventory::EquipWeapon(UINT Slot)
@@ -65,24 +66,34 @@ void UDP_WeaponInventory::EquipWeapon(UINT Slot)
 	}
 
 	WeaponModelComp->SetSkeletalMesh(EquipedWeapon->WeaponModel);
-	EquipedWeapon->Owner = PlayerReference;
 	//TODO: Equip Animation, Position Weapon
 }
 
-void UDP_WeaponInventory::UseWeapon(UseType Use, FVector FirePoint, FVector Direction)
+void UDP_WeaponInventory::UseWeapon(UseType Use, bool Shoot)
 {
 	switch (Use % 3)
 	{
 	case 0:
-		EquipedWeapon->ShootWeapon_Implementation(FirePoint, Direction, 100000);
+		if (Shoot)
+			EquipedWeapon->ShootWeapon_Implementation();
+		else
+			EquipedWeapon->StopShootWeapon_Implementation();
 		break;
 
 	case 1:
-		EquipedWeapon->AltShootWeapon_Implementation(FirePoint, Direction, 100000);
+		if (Shoot)
+			EquipedWeapon->AltShootWeapon_Implementation();
+		else
+			EquipedWeapon->StopAltShootWeapon_Implementation();
 		break;
 
 	case 2:
 		EquipedWeapon->Reload_Implementation();
 		break;
 	}
+}
+
+FWeaponData UDP_WeaponInventory::GetWeaponData()
+{
+	return EquipedWeapon->GetWeaponData();
 }

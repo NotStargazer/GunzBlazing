@@ -25,14 +25,8 @@ class FG19GPDEGREEPROJECT_API UDP_ProjectileLauncher : public UDP_Weapon
 
 	UPROPERTY(EditDefaultsOnly, Category = Weapon)
 	class UStaticMeshComponent* WeaponModelComp;
-	
-	UPROPERTY(EditDefaultsOnly, Category = Weapon)
-	TSubclassOf<class ADP_Projectile> ProjectileActor;
+
 
 public:
-	UDP_ProjectileLauncher();
-
-	virtual void ShootWeapon_Implementation(FVector StartLocation, FVector Direction, float Range) override;
-	virtual void AltShootWeapon_Implementation(FVector StartLocation, FVector Direction, float Range) override;
-
+	virtual void ShootWeapon_Implementation() override;
 };

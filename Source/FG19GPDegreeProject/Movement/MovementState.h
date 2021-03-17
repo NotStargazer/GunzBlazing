@@ -6,9 +6,6 @@
 //#include "MovementStateMachine.h"
 #include "EMovementState.h"
 
-/**
- * 
- */
 class FG19GPDEGREEPROJECT_API MovementState
 {
 public:
@@ -17,6 +14,8 @@ public:
 
 	class UMovementStateMachine* Machine;
 	EMovementState State;
+
+	virtual void Initialize(UMovementStateMachine* machine);
 
 	virtual void OnEnter() PURE_VIRTUAL(MovementState::OnEnter,);
 	virtual void OnTick(float Delta) PURE_VIRTUAL(MovementState::OnTick,);

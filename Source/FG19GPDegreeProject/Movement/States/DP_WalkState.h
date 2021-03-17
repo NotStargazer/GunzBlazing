@@ -15,7 +15,13 @@ public:
 	DP_WalkState();
 	~DP_WalkState();
 
+	virtual void Initialize(UMovementStateMachine* machine) override;
+
 	virtual void OnEnter() override;
 	virtual void OnTick(float Delta) override;
 	virtual void OnExit() override;
+
+private:
+
+	float MoveModifer = 1.0f;
 };

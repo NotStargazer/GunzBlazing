@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "HealthComponent.h"
+#include "StaminaComponent.h"
 #include "GameFramework/Character.h"
 #include "../FG19GPDegreeProjectCharacter.h"
 #include "../System/Damagable.h"
@@ -20,10 +21,17 @@ public:
 	AFPSPlayer();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
+	float MoveModifier = 1.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
+		bool MovesForward = false;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
 		bool WillRun = false;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
 		bool WillCrouch = false;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
+		bool ToggleRun = true;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
 		float RunModifier = 1.5f;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
@@ -38,23 +46,32 @@ protected:
 	float BaseTurnRate;
 	/** Base look up/down rate, in deg/sec. Other scaling may affect final rate. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera)
-		float BaseLookUpRate;
+	float BaseLookUpRate;
 
 	/** Gun muzzle's offset from the characters location */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
-		FVector GunOffset;
+	FVector GunOffset;
 
 	/** Projectile class to spawn */
 	UPROPERTY(EditDefaultsOnly, Category = Projectile)
-		TSubclassOf<class AFG19GPDegreeProjectProjectile> ProjectileClass;
+	TSubclassOf<class AFG19GPDegreeProjectProjectile> ProjectileClass;
 
 	/** Sound to play each time we fire */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
-		class USoundBase* FireSound;
+	class USoundBase* FireSound;
 
 	/** AnimMontage to play each time we fire */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
-		class UAnimMontage* FireAnimation;
+	class UAnimMontage* FireAnimation;
+
+	/** First person camera */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
+		class UCameraComponent* FirstPersonCameraComponent;
+
+	/** Pawn mesh: 1st person view (arms; seen only by self) */
+	UPROPERTY(VisibleDefaultsOnly, Category = Mesh)
+		class USkeletalMeshComponent* Mesh1P;
+
 	/** Gun mesh: 1st person view (seen only by self) */
 	UPROPERTY(VisibleDefaultsOnly, Category = Mesh)
 	class USkeletalMeshComponent* FP_Gun;
@@ -65,6 +82,9 @@ protected:
 
 	/** Fires a projectile. */
 	void OnFire();
+	
+	/** Reload currently equipped weapon */
+	void ReloadWeapon();
 
 	/** Handles moving forward/backward */
 	void MoveForward(float Val);
@@ -72,6 +92,13 @@ protected:
 	/** Handles stafing movement, left and right */
 	void MoveRight(float Val);
 
+	void Run();
+	void StopRun();
+
+	void Crouch();
+	void StopCrouch();
+
+	const FString EnumToString(const TCHAR* Enum, int32 EnumValue);
 	/**
 	 * Called via input to turn at a given rate.
 	 * @param Rate	This is a normalized rate, i.e. 1.0 means 100% of desired turn rate
@@ -91,28 +118,35 @@ public:
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
-	//UPROPERTY(Category = Movement, VisibleAnywhere, BlueprintReadOnly)
-	//class UMovementStateMachine* Movement;
+
+	UPROPERTY(Category = Movement, VisibleAnywhere, BlueprintReadOnly)
+	class UMovementStateMachine* Movement;
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Crouch State")
+	void OnCrouch(bool startCrouch);
+	bool bIsSliding;
 
 	void ShootWeapon();
+	void StopShootWeapon();
 
-	/** Name of the Health component. Use this name if you want to use a different class (with ObjectInitializer.SetDefaultSubobjectClass). */
-	static FName HealthComponentName;
 	UPROPERTY(Category = Player, VisibleAnywhere, BlueprintReadWrite)
-	class UHealthComponent* HealthComponent;
+	class UHealthComponent* Health;
+	UPROPERTY(Category = Player, VisibleAnywhere, BlueprintReadWrite)
+	class UStaminaComponent* Stamina;
 
 	UPROPERTY(Category = Player, VisibleAnywhere, BlueprintReadWrite)
 	class UDP_WeaponInventory* WeaponInventory;
 
-	FORCEINLINE float GetHealth() const { return HealthComponent->Health; }
-	FORCEINLINE float GetArmor() const { return HealthComponent->Armor; }
+	FORCEINLINE float GetHealth() const { return Health->Health; }
+	FORCEINLINE float GetArmor() const { return Health->Shield; }
+	FORCEINLINE float GetStamina() const { return Stamina->Stamina; }
+
+	FVector GetWeaponFirePoint() const;
 
 	PlayerDeathDelegate PlayerDeath;
-
 	void OnDeath();
 	
 	virtual void OnDamage_Implementation(float damage, FVector force, DamageType damageType) override;
-
-	UFUNCTION()
-	void OnCompHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
+	//UFUNCTION()
+	//void OnCompHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
 };

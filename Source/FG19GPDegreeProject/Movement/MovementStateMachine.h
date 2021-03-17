@@ -6,13 +6,6 @@
 #include "Components/ActorComponent.h"
 #include "../Player/FPSPlayer.h"
 
-#include "States/DP_CrouchState.h"
-#include "States/DP_IdleState.h"
-#include "States/DP_JumpState.h"
-#include "States/DP_RunState.h"
-#include "States/DP_SlideState.h"
-#include "States/DP_WalkState.h"
-
 #include "EMovementState.h"
 #include "MovementState.h"
 #include "MovementStateMachine.generated.h"
@@ -31,8 +24,18 @@ public:
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+	void ChangeState(MovementState* newState);
+
 	AFPSPlayer* User;
-	EMovementState* State;
+	UFUNCTION(BlueprintCallable, Category = State)
+	EMovementState GetState();
+
+	class DP_IdleState* IdleState;
+	class DP_WalkState* WalkState;
+	class DP_JumpState* JumpState;
+	class DP_RunState* RunState;
+	class DP_CrouchState* CrouchState;
+	class DP_SlideState* SlideState;
 
 protected:
 	// Called when the game starts
@@ -42,6 +45,4 @@ private:
 
 	class MovementState* CurrentState;
 
-
-	void ChangeState(MovementState* newState);
 };

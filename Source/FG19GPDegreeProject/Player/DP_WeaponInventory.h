@@ -28,8 +28,11 @@ class FG19GPDEGREEPROJECT_API UDP_WeaponInventory : public UActorComponent
 	UPROPERTY(EditDefaultsOnly, Category = DefaultWeapons)
 	TSubclassOf<UDP_Weapon> MeleeWeaponClass;
 	
+	UPROPERTY(VisibleInstanceOnly)
 	class UDP_Weapon* PrimaryWeapon;
+	UPROPERTY(VisibleInstanceOnly)
 	class UDP_Weapon* SecondaryWeapon;
+	UPROPERTY(VisibleInstanceOnly)
 	class UDP_Weapon* MeleeWeapon;
 
 	class UDP_Weapon* EquipedWeapon;
@@ -53,5 +56,8 @@ public:
 
 	void EquipWeapon(UINT Slot);
 
-	void UseWeapon(UseType Use, FVector FirePoint, FVector Direction);
+	void UseWeapon(UseType Use, bool Shoot);
+
+	UFUNCTION(BlueprintCallable)
+	FWeaponData GetWeaponData();
 };
