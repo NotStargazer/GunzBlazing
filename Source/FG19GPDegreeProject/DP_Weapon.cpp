@@ -5,11 +5,15 @@
 #include "DP_Projectile.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "TimerManager.h"
+#include "Math/OrientedBox.h"
+#include "DrawDebugHelpers.h"
+#include "Components/CapsuleComponent.h"
 
 void UDP_Weapon::SetupWeapon(AFPSPlayer* Player)
 {
 	Clip = ClipSize;
-	Ammo = MaxAmmo + ClipSize;
+	MaxAmmo += ClipSize;
+	Ammo = MaxAmmo;
 	Owner = Player;
 }
 
@@ -81,8 +85,37 @@ void UDP_Weapon::ShootProjectile(float Speed, float Damage)
 
 	ADP_Projectile* Proj = World->SpawnActor<ADP_Projectile>(ProjectileActor, Transform, ActorSpawnParams);
 
-	Proj->SetupOwners(Owner, this);
-	Proj->FireProjectile(Owner->GetControlRotation().Vector(), Speed, Damage);
+	if (Proj != nullptr)
+	{
+		Proj->SetupOwners(Owner, this);
+		if (Owner->IsLocallyControlled())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Bitch"))
+		}
+		AFPSPlayer* player = ((AFPSPlayer*)Owner);
+		FVector Direction = Owner->GetCapsuleComponent()->GetComponentRotation().Vector();
+		//FVector Direction = player->AimDirection.Vector();
+		//FVector Direction = Owner->GetControlRotation().Vector();
+		Proj->FireProjectile(Direction, Speed, Damage, PushForceMultiplier);
+		if (player != nullptr)
+		{
+			player->OnFire();
+#if !UE_BUILD_SHIPPING
+			if (player->bDebugDrawProjectilePath)
+			{
+				const float ArrowLength = 3000.0f;
+				const float ArrowSize = 50.0f;
+				DrawDebugDirectionalArrow(World, Transform.GetLocation(), Transform.GetLocation() + Direction * ArrowLength, ArrowSize, FColor::Red, false, 2.5f);
+				//DrawDebugDirectionalArrow(World, Transform.GetLocation(), Transform.GetLocation() + FacingRotationStart * ArrowLength, ArrowSize, FColor::Green);
+			}
+#endif
+		}
+
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Projectile failed the spawn, are you missing a muzzle point on the gun model? Or are you missing a projectile in the weapon class?"))
+	}
 }
 
 void UDP_Weapon::ShootHitscan(float Damage, float MaxRange, float MinRange)
@@ -102,12 +135,28 @@ void UDP_Weapon::ShootHitscan(float Damage, float MaxRange, float MinRange)
 		float FalloffPercentage = 1 - FMath::Clamp(((HitResult.Distance - MinRange) / MaxRange), 0.f, 1.f);
 		float EndDamage = FalloffPercentage * Damage;
 
-		DamagableActor->OnDamage(EndDamage, HitResult.Normal * EndDamage, DamageType::HealthOnly);
+		DamagableActor->OnDamage(EndDamage, -HitResult.Normal * EndDamage * PushForceMultiplier, DamageType::HealthOnly);
 	}
 }
 
-void UDP_Weapon::MeleeAttack(float Damage)
+void UDP_Weapon::MeleeAttack(float Damage, float Range)
 {
+	TArray<AActor*> Ignores;
+	Ignores.Add(Owner);
+
+	FHitResult HitResult;
+
+	FVector EndTrace = Owner->GetActorLocation() + Owner->GetActorRotation().Vector() * Range;
+
+	bool Hit = UKismetSystemLibrary::BoxTraceSingle(Owner->GetWorld(), Owner->GetActorLocation(), EndTrace, FVector(75), Owner->GetControlRotation(), ETraceTypeQuery::TraceTypeQuery_MAX, true,
+		Ignores, EDrawDebugTrace::ForDuration, HitResult, true);
+	
+	if (Hit)
+	{
+		IDamagable* DamagableActor = Cast<IDamagable>(HitResult.Actor);
+
+		DamagableActor->OnDamage(Damage, -HitResult.Normal * Damage * PushForceMultiplier, DamageType::All);
+	}
 }
 
 void UDP_Weapon::LoadWeapon()
@@ -143,6 +192,21 @@ void UDP_Weapon::LoadWeapon()
 			}
 		}
 	}
+}
+
+void UDP_Weapon::AddAmmo(float Percentage)
+{
+	Ammo = FMath::Min(FMath::FloorToInt(MaxAmmo * Percentage + Ammo), MaxAmmo);
+}
+
+bool UDP_Weapon::IsMaxAmmo()
+{
+	return Ammo >= MaxAmmo;
+}
+
+bool UDP_Weapon::IsEmptyClip()
+{
+	return Clip <= 0;
 }
 
 void UDP_Weapon::FinishLoad()

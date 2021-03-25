@@ -38,6 +38,8 @@ void UDP_WeaponInventory::Initialize(AFPSPlayer* Player, USkeletalMeshComponent*
 
 void UDP_WeaponInventory::EquipWeapon(UINT Slot)
 {
+	UDP_Weapon* OldWeapon = EquipedWeapon;
+
 	switch (Slot % 3)
 	{
 	case 0:
@@ -53,15 +55,22 @@ void UDP_WeaponInventory::EquipWeapon(UINT Slot)
 		break;
 	}
 
+	if (EquipedWeapon == OldWeapon)
+	{
+		return;
+	}
+
 	if (!IsValid(EquipedWeapon))
 	{
 		UE_LOG(LogTemp, Error, TEXT("Missing Weapon!!!"));
+		EquipedWeapon = OldWeapon;
 		return;
 	}
 
 	if (!IsValid(EquipedWeapon->WeaponModel))
 	{
 		UE_LOG(LogTemp, Error, TEXT("Missing Weapon Model!!!"));
+		EquipedWeapon = OldWeapon;
 		return;
 	}
 
@@ -91,6 +100,37 @@ void UDP_WeaponInventory::UseWeapon(UseType Use, bool Shoot)
 		EquipedWeapon->Reload_Implementation();
 		break;
 	}
+}
+
+void UDP_WeaponInventory::AddAmmo(float Percentage)
+{
+	if (IsValid(PrimaryWeapon))
+		PrimaryWeapon->AddAmmo(Percentage);
+	if (IsValid(SecondaryWeapon))
+		SecondaryWeapon->AddAmmo(Percentage);
+	if (IsValid(MeleeWeapon))
+		MeleeWeapon->AddAmmo(Percentage);
+}
+
+bool UDP_WeaponInventory::IsMaxAmmo()
+{
+	bool Primary = false;
+	bool Secondary = false;
+	bool Melee = false;
+
+	if (IsValid(PrimaryWeapon))
+		Primary = PrimaryWeapon->IsMaxAmmo();
+	if (IsValid(SecondaryWeapon))
+		Secondary = SecondaryWeapon->IsMaxAmmo();
+	if (IsValid(MeleeWeapon))
+		Melee = MeleeWeapon->IsMaxAmmo();
+
+	return (Primary || Secondary || Melee);
+}
+
+bool UDP_WeaponInventory::IsEmptyClip()
+{
+	return EquipedWeapon->IsEmptyClip();
 }
 
 FWeaponData UDP_WeaponInventory::GetWeaponData()

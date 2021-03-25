@@ -51,7 +51,6 @@ class FG19GPDEGREEPROJECT_API ADP_Projectile : public AActor, public IDamagable
 	UPROPERTY(EditDefaultsOnly, Category = Values)
 	float ExplosionRadius;
 
-	UPROPERTY(EditDefaultsOnly, Category = Values)
 	float PushForceMultiplier;
 
 	float MaximumDamage;
@@ -68,7 +67,7 @@ public:
 	ADP_Projectile();
 
 	UFUNCTION()
-	void FireProjectile(FVector Direction, float Speed, float Damage);
+	void FireProjectile(FVector Direction, float Speed, float Damage, float Force);
 
 	UFUNCTION()
 	void Explode(FVector Point, TArray<AActor*> IgnoreActors);

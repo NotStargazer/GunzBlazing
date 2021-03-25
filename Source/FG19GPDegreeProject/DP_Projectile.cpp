@@ -35,6 +35,8 @@ ADP_Projectile::ADP_Projectile()
 
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.TickGroup = TG_DuringPhysics;
+
+	//SetReplicates(true);
 }
 
 void ADP_Projectile::BeginPlay()
@@ -47,10 +49,11 @@ void ADP_Projectile::BeginPlay()
 	ProjectileMovement->ProjectileGravityScale = sizeof(bHasGravity);
 }
 
-void ADP_Projectile::FireProjectile(FVector Direction, float Speed, float Damage)
+void ADP_Projectile::FireProjectile(FVector Direction, float Speed, float Damage, float Force)
 {
 	ProjectileMovement->bRotationFollowsVelocity = bHasGravity;
 	MaximumDamage = Damage;
+	PushForceMultiplier = Force;
 
 	ProjectileMovement->Velocity = Direction * Speed;
 	CollisionComp->SetCollisionEnabled(CollisionType);

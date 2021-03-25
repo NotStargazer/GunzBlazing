@@ -70,6 +70,9 @@ public:
 	bool bReloading;
 
 	UPROPERTY(EditDefaultsOnly, Category = BaseWeapon)
+	float PushForceMultiplier;
+
+	UPROPERTY(EditDefaultsOnly, Category = BaseWeapon)
 	WeaponType type;
 
 	UPROPERTY(EditDefaultsOnly, Category = BaseWeapon)
@@ -100,9 +103,16 @@ public:
 	void ShootHitscan(float Damage, float MaxRange, float MinRange);
 
 	UFUNCTION()
-	void MeleeAttack(float Damage);
+	void MeleeAttack(float Damage, float Range);
 
 	void LoadWeapon();
+
+	void AddAmmo(float Percentage = 0.5f);
+
+	bool IsMaxAmmo();
+
+	bool IsEmptyClip();
+
 	void FinishLoad();
 
 	FWeaponData GetWeaponData() const;

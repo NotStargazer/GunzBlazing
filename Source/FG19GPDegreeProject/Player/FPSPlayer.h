@@ -8,9 +8,13 @@
 #include "GameFramework/Character.h"
 #include "../FG19GPDegreeProjectCharacter.h"
 #include "../System/Damagable.h"
+#include "../Debug/NetDebugWidget.h"
 #include "FPSPlayer.generated.h"
 
 DECLARE_DELEGATE_OneParam(PlayerDeathDelegate, AFPSPlayer*);
+
+DECLARE_DELEGATE_OneParam(SwitchWeaponInput, const int32);
+
 UCLASS()
 class FG19GPDEGREEPROJECT_API AFPSPlayer : public ACharacter, public IDamagable
 {
@@ -24,22 +28,36 @@ public:
 	float MoveModifier = 1.0f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
-		bool MovesForward = false;
+	bool MovesForward = false;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
-		bool WillRun = false;
+	bool WillRun = false;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
-		bool WillCrouch = false;
+	bool WillCrouch = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
-		bool ToggleRun = true;
+	bool ToggleRun = true;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
-		float RunModifier = 1.5f;
+	float RunModifier = 1.5f;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
-		float CrouchModifier = .5f;
+	float CrouchModifier = .5f;
 
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
+
+	/** Debugging Menu  */
+	UPROPERTY(Transient)
+	UNetDebugWidget* DebugMenuInstance = nullptr;
+
+	bool bShowDebugMenu = false;
+
+	void OnDebugMenuToggle();
+
+	void CreateDebugWidget();
+
+	void ShowDebugMenu();
+	void HideDebugMenu();
+	/** -----------  */
 
 	/** Base turn rate, in deg/sec. Other scaling may affect final turn rate. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera)
@@ -47,6 +65,8 @@ protected:
 	/** Base look up/down rate, in deg/sec. Other scaling may affect final rate. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera)
 	float BaseLookUpRate;
+
+	float StrafeDirection;
 
 	/** Gun muzzle's offset from the characters location */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
@@ -66,11 +86,11 @@ protected:
 
 	/** First person camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
-		class UCameraComponent* FirstPersonCameraComponent;
+	class UCameraComponent* FirstPersonCameraComponent;
 
 	/** Pawn mesh: 1st person view (arms; seen only by self) */
 	UPROPERTY(VisibleDefaultsOnly, Category = Mesh)
-		class USkeletalMeshComponent* Mesh1P;
+	class USkeletalMeshComponent* Mesh1P;
 
 	/** Gun mesh: 1st person view (seen only by self) */
 	UPROPERTY(VisibleDefaultsOnly, Category = Mesh)
@@ -79,10 +99,7 @@ protected:
 	/** Location on gun mesh where projectiles should spawn. */
 	UPROPERTY(VisibleDefaultsOnly, Category = Mesh)
 	class USceneComponent* FP_MuzzleLocation;
-
-	/** Fires a projectile. */
-	void OnFire();
-	
+		
 	/** Reload currently equipped weapon */
 	void ReloadWeapon();
 
@@ -98,6 +115,9 @@ protected:
 	void Crouch();
 	void StopCrouch();
 
+	void Jump();
+	void WallKick();
+
 	const FString EnumToString(const TCHAR* Enum, int32 EnumValue);
 	/**
 	 * Called via input to turn at a given rate.
@@ -111,16 +131,32 @@ protected:
 	 */
 	void LookUpAtRate(float Rate);
 
-public:	
+	void AirStrafe(float Rate);
+
+public:
+	/** Fires a projectile. */
+	void OnFire();
+
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
+	UPROPERTY(EditAnywhere, Category = Debug)
+	TSubclassOf<UNetDebugWidget> DebugMenuClass;
 
 	UPROPERTY(Category = Movement, VisibleAnywhere, BlueprintReadOnly)
 	class UMovementStateMachine* Movement;
+
+	UPROPERTY(Category = Movement, EditDefaultsOnly)
+	float AirStrafeMultiplier;
+
+	UPROPERTY(Category = Movement, EditDefaultsOnly)
+	float WallKickRange = 100.f;
+
+	UPROPERTY(Category = Movement, EditDefaultsOnly, meta = (ClampMin = "0", ClampMax = "1"))
+	float WallKickLeniency = 0.3f;
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Crouch State")
 	void OnCrouch(bool startCrouch);
@@ -128,6 +164,28 @@ public:
 
 	void ShootWeapon();
 	void StopShootWeapon();
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Debug)
+	bool bDebugDrawProjectilePath;
+
+	FRotator AimDirection;
+
+	UFUNCTION()
+	void SwitchWeapon(const int32 Index);
+
+	UFUNCTION(Server, Reliable)
+	void Server_Fire(const FVector& StartLocation, const FRotator& FacingRotation);
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_Fire(const FVector& StartLocation, const FRotator& FacingRotation);
+	UFUNCTION(Server, Reliable)
+	void Server_CeaseFire();
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_CeaseFire();
+
+	UFUNCTION(Server, Reliable)
+	void Server_Reload();
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_Reload();
+
 
 	UPROPERTY(Category = Player, VisibleAnywhere, BlueprintReadWrite)
 	class UHealthComponent* Health;

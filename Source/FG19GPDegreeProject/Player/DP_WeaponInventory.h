@@ -21,6 +21,7 @@ class FG19GPDEGREEPROJECT_API UDP_WeaponInventory : public UActorComponent
 {
 	GENERATED_BODY()
 
+private:
 	UPROPERTY(EditDefaultsOnly, Category = DefaultWeapons)
 	TSubclassOf<UDP_Weapon> PrimaryWeaponClass;
 	UPROPERTY(EditDefaultsOnly, Category = DefaultWeapons)
@@ -57,6 +58,12 @@ public:
 	void EquipWeapon(UINT Slot);
 
 	void UseWeapon(UseType Use, bool Shoot);
+
+	void AddAmmo(float Percentage = 0.5f);
+
+	bool IsMaxAmmo();
+
+	bool IsEmptyClip();
 
 	UFUNCTION(BlueprintCallable)
 	FWeaponData GetWeaponData();
