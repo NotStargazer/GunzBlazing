@@ -20,8 +20,8 @@ void DP_CrouchState::Initialize(UMovementStateMachine* machine)
 
 void DP_CrouchState::OnEnter()
 {
-	Machine->User->WillRun = false;
-	Machine->User->MoveModifier = MoveModifer;
+	Machine->User->Server_Run(false);
+	Machine->User->Server_MoveModify(MoveModifer);
 	Machine->User->OnCrouch(true);
 }
 void DP_CrouchState::OnTick(float Delta)
@@ -36,6 +36,6 @@ void DP_CrouchState::OnTick(float Delta)
 }
 void DP_CrouchState::OnExit()
 {
-	Machine->User->MoveModifier = 1.0f;
+	Machine->User->Server_MoveModify(1.0f);
 	Machine->User->OnCrouch(false);
 }

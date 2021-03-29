@@ -28,6 +28,7 @@ ADP_Projectile::ADP_Projectile()
 
 	Model = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ProjectileModel"));
 	Model->SetupAttachment(CollisionComp);
+	Model->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	// Use a ProjectileMovementComponent to govern this projectile's movement
 	ProjectileMovement = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("ProjectileComp"));

@@ -22,11 +22,19 @@ void AFPSGameState::Initialize() {
 	}
 #pragma endregion
 
+
+
 #pragma region	Creating players
 
-	PlayerControllers.Init(nullptr, MaxPlayers);
 	UGameplayStatics::RemovePlayer(GetWorld()->GetFirstPlayerController(), true);
 
+	bool isLocalState = IsLocalState();
+	if (!isLocalState)
+	{
+		return;
+	}
+
+	PlayerControllers.Init(nullptr, MaxPlayers);
 
 	// Create Players
 	for (int32 i = 0; i < MaxPlayers; i++)
@@ -37,7 +45,7 @@ void AFPSGameState::Initialize() {
 
 		AFPSPlayer* player = Cast<AFPSPlayer>(PlayerControllers[i]->GetCharacter());
 
-		if (player != nullptr)
+		if (player != nullptr )
 			player->PlayerDeath.BindUObject(this, &AFPSGameState::Respawn);
 		
 		Respawn(player);
@@ -48,12 +56,38 @@ void AFPSGameState::Initialize() {
 
 void AFPSGameState::Respawn(AFPSPlayer* respawningPlayer)
 {
-
 	if (RespawnPositions.IsValidIndex(0)) {
 		float rn = FMath::RandRange(0, RespawnPositions.Num()-1);
 
 		FVector respawnLocation = RespawnPositions[rn]->GetActorLocation();
+		FRotator respawnRotation = RespawnPositions[rn]->GetActorRotation();
 
 		respawningPlayer->SetActorLocation(respawnLocation);
+		respawningPlayer->SetActorRotation(respawnRotation);
 	}
+}
+
+bool AFPSGameState::IsLocalState()
+{
+	const ENetMode NetMode = GetNetMode();
+
+	if (NetMode != NM_DedicatedServer)
+	{
+		// Not networked.
+		return true;
+	}
+	/*
+	if (NetMode == NM_Client && GetLocalRole() == ROLE_AutonomousProxy)
+	{
+		// Networked client in control.
+		return true;
+	}
+
+	if (GetRemoteRole() != ROLE_AutonomousProxy && GetLocalRole() == ROLE_Authority)
+	{
+		// Local authority in control.
+		return true;
+	}
+	*/
+	return false;
 }

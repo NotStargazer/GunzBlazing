@@ -15,6 +15,27 @@ DECLARE_DELEGATE_OneParam(PlayerDeathDelegate, AFPSPlayer*);
 
 DECLARE_DELEGATE_OneParam(SwitchWeaponInput, const int32);
 
+USTRUCT(BlueprintType)
+struct FPlayerData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly)
+	FString UserName;
+	
+	UPROPERTY(BlueprintReadOnly)
+	int DamageDone;
+
+	UPROPERTY(BlueprintReadOnly)
+	int Kills;
+
+	UPROPERTY(BlueprintReadOnly)
+	int Deaths;
+
+	UPROPERTY(BlueprintReadOnly)
+	int Accuracy;
+};
+
 UCLASS()
 class FG19GPDEGREEPROJECT_API AFPSPlayer : public ACharacter, public IDamagable
 {
@@ -24,14 +45,14 @@ public:
 	// Sets default values for this character's properties
 	AFPSPlayer();
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement, Replicated)
 	float MoveModifier = 1.0f;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement, Replicated)
 	bool MovesForward = false;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement, Replicated)
 	bool WillRun = false;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement, Replicated)
 	bool WillCrouch = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
@@ -41,7 +62,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement)
 	float CrouchModifier = .5f;
 
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	
 protected:
+
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
@@ -99,6 +123,9 @@ protected:
 	/** Location on gun mesh where projectiles should spawn. */
 	UPROPERTY(VisibleDefaultsOnly, Category = Mesh)
 	class USceneComponent* FP_MuzzleLocation;
+
+	UPROPERTY()
+	FPlayerData PlayerData;
 		
 	/** Reload currently equipped weapon */
 	void ReloadWeapon();
@@ -162,6 +189,8 @@ public:
 	void OnCrouch(bool startCrouch);
 	bool bIsSliding;
 
+	bool bHasWallKicked;
+
 	void ShootWeapon();
 	void StopShootWeapon();
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Debug)
@@ -186,6 +215,24 @@ public:
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_Reload();
 
+	UFUNCTION(Server, Reliable)
+	void Server_Run(bool run);
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_Run(bool run);
+	
+	UFUNCTION(Server, Reliable)
+	void Server_MoveForward(bool isMovingForward);
+	//UFUNCTION(NetMulticast, Reliable)
+	//void Multicast_MoveForward(bool isMovingForward);
+
+	UFUNCTION(Server, Reliable)
+	void Server_MoveModify(float moveMod);
+	
+	UFUNCTION(Server, Reliable)
+	void Server_Crouch(bool crouch);
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_Crouch(bool crouch);
+	
 
 	UPROPERTY(Category = Player, VisibleAnywhere, BlueprintReadWrite)
 	class UHealthComponent* Health;
@@ -198,6 +245,7 @@ public:
 	FORCEINLINE float GetHealth() const { return Health->Health; }
 	FORCEINLINE float GetArmor() const { return Health->Shield; }
 	FORCEINLINE float GetStamina() const { return Stamina->Stamina; }
+	FORCEINLINE FPlayerData GetPlayerData() const { return PlayerData; }
 
 	FVector GetWeaponFirePoint() const;
 

@@ -33,13 +33,13 @@ bool UStaminaComponent::Drain(float DeltaTime)
 	if (Stamina <= 0.0f) {
 		Stamina = 0.0f;
 		Exhausted = true;
-		if (GEngine) {
-			GEngine->AddOnScreenDebugMessage(-1, .0000625f, FColor::Red, TEXT("Total Exhaustion"));
-		}
+		//if (GEngine) {
+		//	GEngine->AddOnScreenDebugMessage(-1, .0000625f, FColor::Red, TEXT("Total Exhaustion"));
+		//}
 	}
 
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, .0000625f, FColor::Cyan, FString::Printf(TEXT("Stamina is currently: %f"), Stamina));
+	//if (GEngine)
+	//	GEngine->AddOnScreenDebugMessage(-1, .0000625f, FColor::Cyan, FString::Printf(TEXT("Stamina is currently: %f"), Stamina));
 
 	return Exhausted;
 }
@@ -51,8 +51,8 @@ void UStaminaComponent::Regenerate(float DeltaTime)
 	{
 		Exhausted = false;
 	}
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, .0000625f, FColor::Cyan, FString::Printf(TEXT("Stamina is currently: %f"), Stamina));
+	if (GEngine && GetOwnerRole() == ENetRole::ROLE_AutonomousProxy)
+		GEngine->AddOnScreenDebugMessage(-1, .0000625f, FColor::Orange, FString::Printf(TEXT("Stamina is currently: %f"), Stamina));
 }
 
 void UStaminaComponent::Reset()

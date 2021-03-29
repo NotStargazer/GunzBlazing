@@ -2,17 +2,19 @@
 
 
 #include "FPSPlayer.h"
+#include "../System/FPSGameState.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Camera/CameraComponent.h"
 #include "../FG19GPDegreeProjectProjectile.h"
 #include "../Movement/EMovementState.h"
 #include "../Movement/MovementStateMachine.h"
+#include "../System/FPSGameMode.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/InputComponent.h"
 #include "Animation/AnimInstance.h"
 #include "GameFramework/InputSettings.h"
-#include "HeadMountedDisplayFunctionLibrary.h"
+#include "Net/UnrealNetwork.h"
 #include "Kismet/GameplayStatics.h"
 #include "HealthComponent.h"
 #include "DP_WeaponInventory.h"
@@ -44,7 +46,7 @@ AFPSPlayer::AFPSPlayer()
 
 	// Create a CameraComponent	
 	FirstPersonCameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
-	FirstPersonCameraComponent->SetupAttachment(GetCapsuleComponent());
+	FirstPersonCameraComponent->SetupAttachment(GetMesh());
 	FirstPersonCameraComponent->SetRelativeLocation(FVector(-39.56f, 1.75f, 64.f)); // Position the camera
 	FirstPersonCameraComponent->bUsePawnControlRotation = true;
 
@@ -78,6 +80,46 @@ AFPSPlayer::AFPSPlayer()
 	SetReplicates(true);
 }
 
+void AFPSPlayer::SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent)
+{
+	// set up gameplay key bindings
+	check(PlayerInputComponent);
+
+	// Bind jump events
+	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &AFPSPlayer::Jump);
+	PlayerInputComponent->BindAction("Jump", IE_Released, this, &ACharacter::StopJumping);
+
+	// Bind fire event
+	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &AFPSPlayer::ShootWeapon);
+	PlayerInputComponent->BindAction("Fire", IE_Released, this, &AFPSPlayer::StopShootWeapon);
+
+	PlayerInputComponent->BindAction("Reload", IE_Released, this, &AFPSPlayer::ReloadWeapon);
+
+	// Bind jump events
+	PlayerInputComponent->BindAction("Run", IE_Pressed, this, &AFPSPlayer::Run);
+	PlayerInputComponent->BindAction("Run", IE_Released, this, &AFPSPlayer::StopRun);
+
+	// Bind jump events
+	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &AFPSPlayer::Crouch);
+	PlayerInputComponent->BindAction("Crouch", IE_Released, this, &AFPSPlayer::StopCrouch);
+
+	PlayerInputComponent->BindAction<SwitchWeaponInput>("Weapon1", IE_Pressed, this, &AFPSPlayer::SwitchWeapon, 0);
+	PlayerInputComponent->BindAction<SwitchWeaponInput>("Weapon2", IE_Pressed, this, &AFPSPlayer::SwitchWeapon, 1);
+	PlayerInputComponent->BindAction<SwitchWeaponInput>("Weapon3", IE_Pressed, this, &AFPSPlayer::SwitchWeapon, 2);
+
+	// Bind movement events
+	PlayerInputComponent->BindAxis("MoveForward", this, &AFPSPlayer::MoveForward);
+	PlayerInputComponent->BindAxis("MoveRight", this, &AFPSPlayer::MoveRight);
+
+	// We have 2 versions of the rotation bindings to handle different kinds of devices differently
+	// "turn" handles devices that provide an absolute delta, such as a mouse.
+	// "turnrate" is for devices that we choose to treat as a rate of change, such as an analog joystick
+	PlayerInputComponent->BindAxis("Turn", this, &AFPSPlayer::TurnAtRate);
+	PlayerInputComponent->BindAxis("LookUp", this, &AFPSPlayer::LookUpAtRate);
+
+	PlayerInputComponent->BindAction(TEXT("Net Debug"), IE_Pressed, this, &AFPSPlayer::OnDebugMenuToggle);
+}
+
 // Called when the game starts or when spawned
 void AFPSPlayer::BeginPlay()
 {
@@ -90,6 +132,16 @@ void AFPSPlayer::BeginPlay()
 	if (DebugMenuInstance != nullptr)
 	{
 		DebugMenuInstance->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	if(GetNetMode() == NM_DedicatedServer)
+	{
+		AFPSGameMode* GameMode = Cast<AFPSGameMode>(UGameplayStatics::GetGameMode(GetWorld()));
+
+		if (GameMode)
+		{
+			GameMode->AddPlayerToTeam(this);
+		}
 	}
 }
 
@@ -142,12 +194,14 @@ void AFPSPlayer::HideDebugMenu()
 void AFPSPlayer::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	
-	FString message = TEXT("Our enum value: ") + EnumToString(TEXT("EMovementState"), static_cast<uint8>(Movement->GetState()));
+	/*
+	FString message = EnumToString(TEXT("ENetRole"), static_cast<uint8>(GetLocalRole())) +
+		TEXT(" has enum value: ") + EnumToString(TEXT("EMovementState"), static_cast<uint8>(Movement->GetState()));
 	if (GEngine) {
 		//GEngine->ClearOnScreenDebugMessages();
 		GEngine->AddOnScreenDebugMessage(-1, .0000625f, FColor::Green, message);
 	}
+	*/
 }
 
 
@@ -173,26 +227,18 @@ void AFPSPlayer::ShootWeapon()
 
 void AFPSPlayer::StopShootWeapon()
 {
-	Server_CeaseFire();
-}
-
-void AFPSPlayer::SwitchWeapon(const int32 Index)
-{
-	WeaponInventory->EquipWeapon(Index);
-}
-
-FVector AFPSPlayer::GetWeaponFirePoint() const
-{
-	return FP_Gun->GetSocketLocation("Muzzle");
-}
-
-void AFPSPlayer::OnDeath()
-{
-	if (PlayerDeath.IsBound())
+	if (GetLocalRole() >= ROLE_AutonomousProxy)
 	{
-		PlayerDeath.Execute(this);
+		if (HasAuthority())
+		{
+			Server_CeaseFire();
+		}
+		else
+		{
+			WeaponInventory->UseWeapon(UseType::Fire, false);
+			Server_CeaseFire();
+		}
 	}
-	Health->Reset();
 }
 
 void AFPSPlayer::Server_Fire_Implementation(const FVector& StartLocation, const FRotator& FacingRotation)
@@ -209,7 +255,7 @@ void AFPSPlayer::Multicast_Fire_Implementation(const FVector& StartLocation, con
 	else
 	{
 		//()->SetControlRotation(FacingRotation);
-		AimDirection = FacingRotation;
+		//AimDirection = FacingRotation;
 		WeaponInventory->UseWeapon(UseType::Fire, true);
 	}
 }
@@ -221,7 +267,39 @@ void AFPSPlayer::Server_CeaseFire_Implementation()
 
 void AFPSPlayer::Multicast_CeaseFire_Implementation()
 {
-	WeaponInventory->UseWeapon(UseType::Fire, false);
+	if (GetLocalRole() == ROLE_AutonomousProxy)
+	{
+
+	}
+	else
+	{
+		WeaponInventory->UseWeapon(UseType::Fire, false);
+	}
+}
+
+void AFPSPlayer::SwitchWeapon(const int32 Index)
+{
+	WeaponInventory->EquipWeapon(Index);
+}
+
+FVector AFPSPlayer::GetWeaponFirePoint() const
+{
+	return FP_Gun->GetSocketLocation("Muzzle");
+}
+
+void AFPSPlayer::OnDeath()
+{
+	/*if (PlayerDeath.IsBound())
+	{
+		PlayerDeath.Execute(this);
+	}*/
+	AFPSGameState* const GameState = GetWorld() != NULL ? GetWorld()->GetGameState<AFPSGameState>() : NULL;
+	if (GameState != NULL)
+	{
+		GameState->Respawn(this);
+	}
+
+	Health->Reset();
 }
 
 void AFPSPlayer::Server_Reload_Implementation()
@@ -249,63 +327,32 @@ void AFPSPlayer::OnDamage_Implementation(float damage, FVector force, DamageType
 	}
 }
 
-void AFPSPlayer::SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent)
-{
-	// set up gameplay key bindings
-	check(PlayerInputComponent);
-
-	// Bind jump events
-	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &AFPSPlayer::Jump);
-	PlayerInputComponent->BindAction("Jump", IE_Released, this, &ACharacter::StopJumping);
-
-	// Bind fire event
-	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &AFPSPlayer::ShootWeapon);
-	PlayerInputComponent->BindAction("Fire", IE_Released, this, &AFPSPlayer::StopShootWeapon);
-
-	PlayerInputComponent->BindAction("Reload", IE_Released, this, &AFPSPlayer::ReloadWeapon);
-
-	// Bind jump events
-	PlayerInputComponent->BindAction("Run", IE_Pressed, this, &AFPSPlayer::Run);
-	PlayerInputComponent->BindAction("Run", IE_Released, this, &AFPSPlayer::StopRun);
-
-	// Bind jump events
-	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &AFPSPlayer::Crouch);
-	PlayerInputComponent->BindAction("Crouch", IE_Released, this, &AFPSPlayer::StopCrouch);
-
-	PlayerInputComponent->BindAction<SwitchWeaponInput>("Weapon1", IE_Pressed, this, &AFPSPlayer::SwitchWeapon, 0);
-	PlayerInputComponent->BindAction<SwitchWeaponInput>("Weapon2", IE_Pressed, this, &AFPSPlayer::SwitchWeapon, 1);
-	PlayerInputComponent->BindAction<SwitchWeaponInput>("Weapon3", IE_Pressed, this, &AFPSPlayer::SwitchWeapon, 2);
-
-	// Bind movement events
-	PlayerInputComponent->BindAxis("MoveForward", this, &AFPSPlayer::MoveForward);
-	PlayerInputComponent->BindAxis("MoveRight", this, &AFPSPlayer::MoveRight);
-
-	// We have 2 versions of the rotation bindings to handle different kinds of devices differently
-	// "turn" handles devices that provide an absolute delta, such as a mouse.
-	// "turnrate" is for devices that we choose to treat as a rate of change, such as an analog joystick
-	PlayerInputComponent->BindAxis("Turn", this, &AFPSPlayer::TurnAtRate);
-	PlayerInputComponent->BindAxis("LookUp", this, &AFPSPlayer::LookUpAtRate);
-
-	PlayerInputComponent->BindAction(TEXT("Net Debug"), IE_Pressed, this, &AFPSPlayer::OnDebugMenuToggle);
-}
-
 void AFPSPlayer::MoveForward(float Value)
 {
 	if (bIsSliding)
 		return;
 	if (Value != 0.0f)
 	{
-		if (Value > 0.0f)
-			MovesForward = true;
+		Server_MoveForward(Value > 0.0f);//MovesForward = Value > 0.0f;
 		// add movement in that direction
 		AddMovementInput(GetActorForwardVector(), Value * MoveModifier);
 		//if (GEngine)
 		//	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, FString::Printf(TEXT("Move Modifier is: %f"), MoveModifier));
 	}
 	else
-		MovesForward = false;
+		Server_MoveForward(false);
 }
 
+void AFPSPlayer::Server_MoveForward_Implementation(bool isMovingForward)
+{
+	MovesForward = isMovingForward;
+	//Multicast_MoveForward(isMovingForward);
+}
+/*void AFPSPlayer::Multicast_MoveForward_Implementation(bool isMovingForward)
+{
+	
+}
+*/
 void AFPSPlayer::MoveRight(float Value)
 {
 	if (bIsSliding)
@@ -323,10 +370,9 @@ void AFPSPlayer::MoveRight(float Value)
 void AFPSPlayer::Run()
 {
 	if (!ToggleRun)
-		WillRun = true;
-	else {
-		WillRun = !WillRun;
-	}
+		Server_Run(true);//WillRun = true;
+	else
+		Server_Run(!WillRun);//WillRun = !WillRun;
 }
 
 void AFPSPlayer::StopRun()
@@ -335,18 +381,43 @@ void AFPSPlayer::StopRun()
 		WillRun = false;
 }
 
+void AFPSPlayer::Server_Run_Implementation(bool run)
+{
+	WillRun = run;
+	Multicast_Run(run);
+}
+void AFPSPlayer::Multicast_Run_Implementation(bool run)
+{
+
+}
+
+void AFPSPlayer::Server_MoveModify_Implementation(float moveMod)
+{
+	MoveModifier = moveMod;
+}
+
 void AFPSPlayer::Crouch()
 {
-	WillCrouch = true;
+	Server_Crouch(true);
 	//if (GEngine)
 	//	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, FString::Printf(TEXT("I Will Crouch")));
 }
- 
+
 void AFPSPlayer::StopCrouch()
 {
-	WillCrouch = false;
+	Server_Crouch(false);
 	//if (GEngine)
 	//	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, FString::Printf(TEXT("I Will Stop Crouch")));
+}
+
+void AFPSPlayer::Server_Crouch_Implementation(bool crouch)
+{
+	WillCrouch = crouch;
+	Multicast_Crouch(crouch);
+}
+void AFPSPlayer::Multicast_Crouch_Implementation(bool crouch)
+{
+
 }
 
 void AFPSPlayer::Jump()
@@ -359,34 +430,52 @@ void AFPSPlayer::Jump()
 	ACharacter::Jump();
 }
 
+
 void AFPSPlayer::WallKick()
 {
+	if (bHasWallKicked)
+		return;
+
 	UWorld* WorldContext = GetWorld();
 	FVector ActorLocation = GetActorLocation();
 
 	TArray<AActor*> Ignores;
 	Ignores.Add(this);
 
-	FHitResult Hit;
+	FHitResult HitRight;
+	FHitResult HitLeft;
 
-	bool IsWall;
-	IsWall = UKismetSystemLibrary::LineTraceSingle(WorldContext, ActorLocation, ActorLocation + GetActorRightVector() * GetCapsuleComponent()->GetScaledCapsuleRadius() * WallKickRange,
-		ETraceTypeQuery::TraceTypeQuery1, true, Ignores, EDrawDebugTrace::ForDuration, Hit, true);
+	bool IsWallRight;
+	bool IsWallLeft;
+	IsWallRight = UKismetSystemLibrary::LineTraceSingle(WorldContext, ActorLocation, ActorLocation + GetActorRightVector() * (GetCapsuleComponent()->GetScaledCapsuleRadius() + WallKickRange),
+		ETraceTypeQuery::TraceTypeQuery1, true, Ignores, EDrawDebugTrace::ForDuration, HitRight, true);
+	IsWallLeft = UKismetSystemLibrary::LineTraceSingle(WorldContext, ActorLocation, ActorLocation + -GetActorRightVector() * (GetCapsuleComponent()->GetScaledCapsuleRadius() + WallKickRange),
+		ETraceTypeQuery::TraceTypeQuery1, true, Ignores, EDrawDebugTrace::ForDuration, HitLeft, true);
 
-	if (IsWall)
+	if (IsWallRight || IsWallLeft)
 	{
-		UCharacterMovementComponent* CharacterMovment = GetCharacterMovement();
-		FVector2D XYVel = FVector2D(CharacterMovment->Velocity);
-		FVector2D Forward = FVector2D(GetActorForwardVector());
+		FVector CharForward = GetActorForwardVector();
+
+		UCharacterMovementComponent* CharMovement = GetCharacterMovement();
+		FVector2D XYVel = FVector2D(CharMovement->Velocity);
+		FVector2D Forward = FVector2D(CharForward);
 		float Dot = FVector2D::DotProduct(XYVel.GetSafeNormal(), Forward);
 
-		bool IsFacingForward = Dot > WallKickLeniency;
-
-		if (IsFacingForward)
+		if (Dot > WallKickLeniency)
 		{
-			float ZVel = FMath::Max(CharacterMovment->Velocity.Z, CharacterMovment->JumpZVelocity);
-			FVector ReflectVector = FMath::GetReflectionVector(FVector(XYVel.X, XYVel.Y, 0), Hit.Normal);
-			CharacterMovment->Velocity = FVector(ReflectVector.X, ReflectVector.Y, ZVel);
+			float ZVel = FMath::Max(CharMovement->Velocity.Z, CharMovement->JumpZVelocity);
+
+			FVector WallForward = FVector::CrossProduct(IsWallRight ? HitRight.Normal : HitLeft.Normal, IsWallRight ? -FVector::UpVector : FVector::UpVector);
+
+			float KickDot = FVector::DotProduct(WallForward, CharForward);
+
+			FVector2D ForwardVelocity = Forward * XYVel.Size();
+
+			if (KickDot > WallKickLeniency)
+			{
+				CharMovement->Velocity = FVector(ForwardVelocity.X, ForwardVelocity.Y, ZVel);
+				bHasWallKicked = true;
+			}
 		}
 
 	}
@@ -408,7 +497,7 @@ void AFPSPlayer::LookUpAtRate(float Rate)
 
 void AFPSPlayer::AirStrafe(float Rate)
 {	
-	UCharacterMovementComponent* MovementComp = GetCharacterMovement();
+	UPawnMovementComponent* MovementComp = GetMovementComponent();
 	FVector CurrentVelocity = FVector(MovementComp->Velocity.X, MovementComp->Velocity.Y, 0);
 	FVector Velocity = CurrentVelocity;
 	float MaxSpeed = Velocity.Size();
@@ -419,8 +508,8 @@ void AFPSPlayer::AirStrafe(float Rate)
 		Velocity = CurrentVelocity.GetSafeNormal() * MaxSpeed;
 	}
 
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Blue, FString::Printf(TEXT("Speed: %f"), Velocity.Size()));
+	//if (GEngine)
+	//	GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Blue, FString::Printf(TEXT("Speed: %f"), Velocity.Size()));
 
 	MovementComp->Velocity = FVector(Velocity.X, Velocity.Y, MovementComp->Velocity.Z);
 }
@@ -478,4 +567,14 @@ const FString AFPSPlayer::EnumToString(const TCHAR* Enum, int32 EnumValue)
 #else
 	return EnumPtr->GetEnumName(EnumValue);
 #endif
+}
+
+void AFPSPlayer::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(AFPSPlayer, WillRun);
+	DOREPLIFETIME(AFPSPlayer, MovesForward);
+	DOREPLIFETIME(AFPSPlayer, WillCrouch);
+	DOREPLIFETIME(AFPSPlayer, MoveModifier);
 }

@@ -125,7 +125,7 @@ bool UDP_WeaponInventory::IsMaxAmmo()
 	if (IsValid(MeleeWeapon))
 		Melee = MeleeWeapon->IsMaxAmmo();
 
-	return (Primary || Secondary || Melee);
+	return (Primary && Secondary && Melee);
 }
 
 bool UDP_WeaponInventory::IsEmptyClip()

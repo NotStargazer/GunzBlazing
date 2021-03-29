@@ -31,5 +31,5 @@ void DP_JumpState::OnTick(float Delta)
 }
 void DP_JumpState::OnExit()
 {
-
+	Machine->User->bHasWallKicked = false;
 }

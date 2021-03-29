@@ -20,7 +20,7 @@ void DP_RunState::Initialize(UMovementStateMachine* machine)
 
 void DP_RunState::OnEnter()
 {
-	Machine->User->MoveModifier = MoveModifer;
+	Machine->User->Server_MoveModify(MoveModifer);
 	Machine->User->GetCharacterMovement()->MaxWalkSpeed = 1200.f;
 }
 void DP_RunState::OnTick(float Delta)
@@ -44,6 +44,6 @@ void DP_RunState::OnTick(float Delta)
 }
 void DP_RunState::OnExit()
 {
-	Machine->User->MoveModifier = 1.0f;
+	Machine->User->Server_MoveModify(1.0f);
 	Machine->User->GetCharacterMovement()->MaxWalkSpeed = 600.f;
 }

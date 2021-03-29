@@ -20,7 +20,7 @@ void DP_WalkState::Initialize(UMovementStateMachine* machine)
 
 void DP_WalkState::OnEnter()
 {
-	Machine->User->MoveModifier = MoveModifer;
+	Machine->User->Server_MoveModify(MoveModifer);
 }
 
 void DP_WalkState::OnTick(float Delta)

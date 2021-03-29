@@ -32,4 +32,8 @@ public:
 	void Respawn(AFPSPlayer* respawningPlayer);
 
 	void Initialize();
+
+private:
+
+	bool IsLocalState();
 };
